@@ -70,8 +70,10 @@ public class LibRetroEmulationController {
      */
     public void startEmulation() {
         try {
-            // Load native library
-            libretro = Native.load("C:/Users/tommy/Desktop/BlockBoy/mgba_libretro", LibRetro.class);
+            // Load native library from parent directory (since Minecraft runs from run/)
+            String libPath = new java.io.File("../mgba_libretro").getAbsolutePath();
+            LOGGER.info(TAG + "Attempting to load LibRetro from: " + libPath);
+            libretro = Native.load(libPath, LibRetro.class);
             LOGGER.info(TAG + "LibRetro loaded successfully");
 
             // Setup callbacks BEFORE init
