@@ -37,6 +37,10 @@ dependencies {
 
     modImplementation include('me.lucko:fabric-permissions-api:0.3.1')
 
+    // JNA for native library access
+    implementation include("net.java.dev.jna:jna:5.13.0")
+    implementation include("net.java.dev.jna:jna-platform:5.13.0")
+
     implementation include("de.maxhenkel.voicechat:voicechat-api:${voicechat_api_version}")
     modRuntimeOnly "maven.modrinth:simple-voice-chat:fabric-${voicechat_mod_version}"
 }

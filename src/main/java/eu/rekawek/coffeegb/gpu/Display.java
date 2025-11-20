@@ -2,9 +2,9 @@ package eu.rekawek.coffeegb.gpu;
 
 public interface Display {
 
-    int DISPLAY_WIDTH = 160;
+    int DISPLAY_WIDTH = 240;
 
-    int DISPLAY_HEIGHT = 144;
+    int DISPLAY_HEIGHT = 160;
 
     void putDmgPixel(int color);
 
