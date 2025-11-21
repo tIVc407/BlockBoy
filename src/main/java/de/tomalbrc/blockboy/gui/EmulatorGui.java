@@ -221,7 +221,7 @@ public class EmulatorGui extends MapGui {
 
             var player = x.getSource().getPlayer();
             if (player != null) {
-                player.connection.send(new ClientboundSetTimePacket(player.level().getGameTime(), player.level().getDayTime(), player.level().getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)));
+                player.connection.send(new ClientboundSetTimePacket(player.level().getGameTime(), player.level().getDayTime(), player.getServer().getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)));
                 if (player.level().isRaining())
                     player.connection.send(new ClientboundGameEventPacket(ClientboundGameEventPacket.STOP_RAINING, 0));
             }
