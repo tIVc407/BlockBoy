@@ -18,7 +18,7 @@ import eu.pb4.mapcanvas.api.utils.CanvasUtils;
 import eu.rekawek.coffeegb.CartridgeOptions;
 import eu.rekawek.coffeegb.controller.ButtonListener;
 import eu.rekawek.coffeegb.emulator.BlockBoyDisplay;
-import eu.rekawek.coffeegb.emulator.EmulationController;
+import de.tomalbrc.blockboy.emulator.LibRetroEmulationController;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundCommandsPacket;
@@ -47,7 +47,7 @@ public class EmulatorGui extends MapGui {
     private double scale = 1;
 
     @Nullable
-    private EmulationController controller;
+    private LibRetroEmulationController controller;
 
     private ServerPlayer player;
 
@@ -73,7 +73,7 @@ public class EmulatorGui extends MapGui {
         BlockBoy.activeSessions.put(player, this);
     }
 
-    public EmulationController getController() {
+    public LibRetroEmulationController getController() {
         return controller;
     }
 
@@ -82,7 +82,7 @@ public class EmulatorGui extends MapGui {
     }
 
     public void playRom(File rom) {
-        this.controller = new EmulationController(new CartridgeOptions(), rom, player);
+        this.controller = new LibRetroEmulationController(new CartridgeOptions(), rom, player);
         this.controller.startEmulation();
     }
 
@@ -229,48 +229,7 @@ public class EmulatorGui extends MapGui {
             return 0;
         }));
 
-        COMMANDS.register(literal("link").then(argument("friend", StringArgumentType.word()).suggests(new PlayingPlayerSuggestionProvider()).executes(x -> {
-            var player = x.getSource().getPlayer();
-            var name = StringArgumentType.getString(x, "friend");
-            var friend = player.server.getPlayerList().getPlayerByName(name);
 
-            if (friend != null) {
-                var s1 = BlockBoy.activeSessions.get(player);
-                var s2 = BlockBoy.activeSessions.get(friend);
-                if (s2 == null) {
-                    player.sendSystemMessage(Component.literal("Could not connect with " + name));
-                    return 1;
-                }
-
-                try {
-                    s1.getController().link(s2.getController());
-                } catch (IOException e) {
-                    player.sendSystemMessage(Component.literal("Could not connect with " + name));
-                    e.printStackTrace();
-                }
-            }
-
-            return 0;
-        })));
-
-        COMMANDS.register(literal("unlink").then(argument("friend", StringArgumentType.word()).suggests(new PlayingPlayerSuggestionProvider()).executes(x -> {
-            var player = x.getSource().getPlayer();
-            var name = StringArgumentType.getString(x, "friend");
-            var friend = player.server.getPlayerList().getPlayerByName(name);
-
-            if (player != null && friend != null) {
-                var s1 = BlockBoy.activeSessions.get(player);
-
-                try {
-                    s1.getController().unlink();
-                } catch (IOException e) {
-                    player.sendSystemMessage(Component.literal("Could not unlink, are you linked with someone?"));
-                    e.printStackTrace();
-                }
-            }
-
-            return 0;
-        })));
 
         COMMANDS.register(
                 literal("theme")

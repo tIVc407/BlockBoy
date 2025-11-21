@@ -54,7 +54,7 @@ public class BlockBoyCommand {
                 var files = Files.list(path);
                 for (Path filepath : files.toList()) {
                     var str = filepath.getFileName().toString().toLowerCase();
-                    if (str.endsWith(".gbc") || str.endsWith(".gb"))
+                    if (str.endsWith(".gbc") || str.endsWith(".gb") || str.endsWith(".gba"))
                         builder.suggest(filepath.getFileName().toString());
                 }
             } catch (IOException e) {

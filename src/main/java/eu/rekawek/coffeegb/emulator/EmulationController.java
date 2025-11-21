@@ -62,7 +62,7 @@ public class EmulationController {
 
             if (linkedPlayer != null && BlockBoy.activeSessions.containsKey(linkedPlayer)) {
                 var controller = BlockBoy.activeSessions.get(linkedPlayer).getController();
-                if (controller != null) controller.unlink();
+                // Removed Game Boy linking support (GBA only)
             }
         }
     }

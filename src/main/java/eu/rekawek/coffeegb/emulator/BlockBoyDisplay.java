@@ -4,10 +4,12 @@ import com.mojang.logging.LogUtils;
 import eu.pb4.mapcanvas.api.core.CanvasImage;
 import eu.pb4.mapcanvas.api.utils.CanvasUtils;
 import eu.rekawek.coffeegb.gpu.Display;
+import com.sun.jna.Pointer;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class BlockBoyDisplay implements Display, Runnable {
 
@@ -33,6 +35,27 @@ public class BlockBoyDisplay implements Display, Runnable {
     private volatile boolean grayscale;
 
     private int pos;
+
+    // Frame queue for non-blocking rendering
+    private final ConcurrentLinkedQueue<FrameData> frameQueue = new ConcurrentLinkedQueue<>();
+
+    /**
+     * Holds raw frame data from LibRetro callback
+     * Converted to XRGB8888 asynchronously by display thread
+     */
+    private static class FrameData {
+        final byte[] data;
+        final int width;
+        final int height;
+        final int pitch;
+
+        FrameData(byte[] data, int width, int height, int pitch) {
+            this.data = data;
+            this.width = width;
+            this.height = height;
+            this.pitch = pitch;
+        }
+    }
 
     public BlockBoyDisplay(int scale, boolean grayscale) {
         super();
@@ -83,23 +106,75 @@ public class BlockBoyDisplay implements Display, Runnable {
         enabled = true;
         pos = 0;
 
+        LogUtils.getLogger().info("[BlockBoyDisplay] Display thread started (using queue for non-blocking rendering)");
+        int frameCount = 0;
+
         while (!doStop) {
-            synchronized (this) {
-                if (frameIsWaiting) {
-                    img.setRGB(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, waitingFrame, 0, DISPLAY_WIDTH);
-                    frameIsWaiting = false;
-                } else {
-                    try {
-                        wait(10);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
+            // Process any queued frames from LibRetro callback
+            FrameData frameData = frameQueue.poll();
+            if (frameData != null) {
+                try {
+                    // Convert RGB565 to XRGB8888 asynchronously on display thread
+                    convertAndUpdateFrame(frameData);
+                    frameCount++;
+                    if (frameCount % 60 == 0) {
+                        LogUtils.getLogger().info("[BlockBoyDisplay] Converted and rendered " + frameCount + " frames");
                     }
+                } catch (Exception e) {
+                    LogUtils.getLogger().error("[BlockBoyDisplay] Error converting frame", e);
+                }
+            } else {
+                // No frames in queue, sleep briefly to avoid busy-waiting
+                try {
+                    Thread.sleep(1);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
                 }
             }
         }
         isStopped = true;
+        LogUtils.getLogger().info("[BlockBoyDisplay] Display thread stopped after " + frameCount + " frames");
+    }
+
+    /**
+     * Convert raw RGB565 frame data to XRGB8888 and update display
+     * Called by display thread asynchronously
+     */
+    private void convertAndUpdateFrame(FrameData frameData) {
+        int pixelIndex = 0;
+        byte[] scanlineData = new byte[frameData.pitch];
+
+        for (int y = 0; y < frameData.height; y++) {
+            System.arraycopy(frameData.data, y * frameData.pitch, scanlineData, 0, frameData.pitch);
+
+            for (int x = 0; x < frameData.width; x++) {
+                int bytePos = x * 2;
+                if (bytePos + 1 < scanlineData.length) {
+                    int rgb565 = ((scanlineData[bytePos + 1] & 0xFF) << 8) | (scanlineData[bytePos] & 0xFF);
+
+                    int r5 = (rgb565 >> 11) & 0x1F;
+                    int g6 = (rgb565 >> 5) & 0x3F;
+                    int b5 = rgb565 & 0x1F;
+
+                    // Expand 5-bit/6-bit to 8-bit
+                    int r8 = (r5 << 3) | (r5 >> 2);
+                    int g8 = (g6 << 2) | (g6 >> 4);
+                    int b8 = (b5 << 3) | (b5 >> 2);
+
+                    if (pixelIndex < rgb.length) {
+                        rgb[pixelIndex++] = (r8 << 16) | (g8 << 8) | b8;
+                    }
+                }
+            }
+        }
+
+        // Update the display image
         synchronized (this) {
-            notifyAll();
+            if (!frameIsWaiting) {
+                System.arraycopy(rgb, 0, waitingFrame, 0, rgb.length);
+                img.setRGB(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, waitingFrame, 0, DISPLAY_WIDTH);
+            }
         }
     }
 
@@ -174,5 +249,28 @@ public class BlockBoyDisplay implements Display, Runnable {
         g.drawImage(image, 0, 0, null);
         g.dispose();
         return newImage;
+    }
+
+    /**
+     * Callback from LibRetro when a frame is ready (RGB565 format)
+     * NON-BLOCKING: Queues raw frame data for asynchronous conversion by display thread
+     * This prevents blocking the emulation thread on expensive RGB565→XRGB8888 conversion
+     */
+    public void onFrameRendered(Pointer data, int width, int height, int pitch) {
+        if (data == null || data.equals(Pointer.NULL)) {
+            return;
+        }
+
+        try {
+            // Copy raw frame data from native pointer to byte array
+            byte[] frameBytes = new byte[height * pitch];
+            data.read(0, frameBytes, 0, frameBytes.length);
+
+            // Queue for asynchronous processing by display thread
+            frameQueue.offer(new FrameData(frameBytes, width, height, pitch));
+
+        } catch (Exception e) {
+            LogUtils.getLogger().error("Error in onFrameRendered: " + e.getMessage(), e);
+        }
     }
 }
